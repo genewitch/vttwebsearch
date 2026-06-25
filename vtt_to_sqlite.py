@@ -149,7 +149,7 @@ def main():
     )
     parser.add_argument(
         '--db',
-        default='allcaptions.db',
+        default='captions.db',
         help="Path to the SQLite database file (default: captions.db)"
     )
     args = parser.parse_args()
