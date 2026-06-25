@@ -30,6 +30,8 @@ import argparse
 import re
 
 # Regular expression to match a WebVTT timestamp line (start --> end)
+# this is broken for archive.org otrr vtt files because they use a slightly different format.
+# may-fix
 TIMING_LINE_RE = re.compile(r'^(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})')
 
 
