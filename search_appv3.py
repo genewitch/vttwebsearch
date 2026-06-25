@@ -16,7 +16,7 @@ import shlex
 from flask import Flask, request, render_template_string, abort, send_file, after_this_request
 
 app = Flask(__name__)
-DATABASE = 'allcaptions.db'
+DATABASE = 'captions.db'
 
 # ----- CONFIGURATION -----
 MEDIA_DIR = "/mnt/syno/music/music/SERVER/"      # <-- change this
