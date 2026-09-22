@@ -19,7 +19,7 @@ app = Flask(__name__)
 DATABASE = 'captions.db'
 
 # ----- CONFIGURATION -----
-MEDIA_DIR = "/mnt/syno/music/music/SERVER/"      # <-- change this
+MEDIA_DIR = "W:\music\SERVER"      # <-- change this
 MEDIA_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.m4a', '.mp3', '.opus']
 # -------------------------
 
@@ -115,12 +115,24 @@ def find_media_file(basename):
         if os.path.isfile(candidate):
             return candidate
     return None
-
-def generate_audio_clip(media_path, start_sec, end_sec):
+def _ffmpeg_path(path: str) -> str:
+    """Convert a Windows path into something FFmpeg will accept as a local file."""
+    path = path.replace('\\', '/')
+    if len(path) >= 2 and path[1] == ':' and not path.startswith('file:'):
+        path = 'file:' + path
+    return path
+    
+def generate_audio_clip_old(media_path, start_sec, end_sec):
     """
     Generate a temporary MP3 file for the requested segment.
     Returns the temporary file path.
     """
+    # --- FIX: Convert Windows path to an FFmpeg-friendly URL ---
+    # Replace backslashes with forward slashes
+    media_path = media_path.replace('\\', '/')
+    # Ensure it starts with 'file:' if it's an absolute path (like W:/...)
+    if ':' in media_path and not media_path.startswith('file:'):
+        media_path = 'file:' + media_path
     prestart = start_sec - 5
     duration = end_sec - prestart + 5
     fd, temp_path = tempfile.mkstemp(suffix='.mp3')
@@ -167,7 +179,55 @@ def generate_audio_clip(media_path, start_sec, end_sec):
 
     print(f"[DEBUG] FFmpeg succeeded. File size: {os.path.getsize(temp_path)} bytes")
     return temp_path
+def generate_audio_clip(media_path, start_sec, end_sec):
+    """
+    Generate a temporary MP3 file for the requested segment.
+    Returns the temporary file path.
+    """
+    prestart = start_sec - 5
+    duration = end_sec - prestart + 5
+    fd, temp_path = tempfile.mkstemp(suffix='.mp3')
+    os.close(fd)
 
+    cmd_parts = [
+        'ffmpeg',
+        '-y',                      # Overwrite output without asking
+        '-ss', str(prestart),
+        '-i', _ffmpeg_path(media_path),
+        '-t', str(duration),
+        '-vn',
+        '-c:a', 'libmp3lame',
+        '-b:a', '192k',
+        '-f', 'mp3',
+        _ffmpeg_path(temp_path),
+    ]
+
+    print(f"[DEBUG] Generating MP3 from: {media_path}")
+    print(f"[DEBUG] Start: {start_sec}s, Duration: {duration}s")
+    print(f"[DEBUG] Running command: {cmd_parts}")
+    print(f"[DEBUG] Temporary output file: {temp_path}")
+
+    result = subprocess.run(cmd_parts, capture_output=True, text=True)
+
+    if result.stderr:
+        print(f"[DEBUG] FFmpeg stderr:\n{result.stderr}")
+    if result.stdout:
+        print(f"[DEBUG] FFmpeg stdout:\n{result.stdout}")
+
+    if result.returncode != 0:
+        print(f"[ERROR] FFmpeg failed with return code {result.returncode}")
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise RuntimeError(f"ffmpeg failed: {result.stderr}")
+
+    if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+        print(f"[ERROR] FFmpeg produced an empty/missing file.")
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise RuntimeError(f"ffmpeg produced empty output. stderr:\n{result.stderr}")
+
+    print(f"[DEBUG] FFmpeg succeeded. File size: {os.path.getsize(temp_path)} bytes")
+    return temp_path
 @app.route('/')
 def index():
     query = request.args.get('q', '').strip()
